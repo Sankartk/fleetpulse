@@ -92,6 +92,42 @@
             display: inline-block; padding: 2px 8px; border-radius: 999px;
             font-size: 0.72rem; font-weight: 500;
         }
+
+        /* Toast notifications */
+        #toast-container {
+            position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999;
+            display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;
+        }
+        .toast-item {
+            display: flex; align-items: center; gap: 0.6rem;
+            padding: 0.65rem 1rem; border-radius: 8px; font-size: 0.82rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            opacity: 0; transform: translateX(100%);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: auto;
+        }
+        .toast-item.show { opacity: 1; transform: translateX(0); }
+        .toast-success { background: #166534; border: 1px solid #22c55e; color: #dcfce7; }
+        .toast-error   { background: #7f1d1d; border: 1px solid #ef4444; color: #fee2e2; }
+        .toast-info    { background: #1e3a5f; border: 1px solid #3b82f6; color: #dbeafe; }
+
+        /* KPI pulse animation on refresh */
+        @keyframes kpi-pulse {
+            0%   { color: inherit; }
+            40%  { color: #f59e0b; text-shadow: 0 0 12px rgba(245,158,11,0.6); }
+            100% { color: inherit; }
+        }
+        .kpi-updated { animation: kpi-pulse 0.8s ease; }
+
+        /* Resolve button */
+        .btn-resolve {
+            background: transparent; border: 1px solid var(--fp-border);
+            color: var(--fp-muted); font-size: 0.7rem; padding: 2px 8px;
+            border-radius: 6px; cursor: pointer; transition: all 0.15s;
+        }
+        .btn-resolve:hover { border-color: var(--fp-green); color: var(--fp-green); }
+        .btn-resolve:disabled { opacity: 0.35; cursor: not-allowed; }
+        .row-resolving { opacity: 0.35; transition: opacity 0.4s ease; }
     </style>
 </head>
 <body>
@@ -120,9 +156,18 @@
             <h1><i class="fa-solid fa-gauge-high me-2" style="color:var(--fp-blue)"></i>Operations Dashboard</h1>
             <div class="breadcrumb">FleetPulse / Dashboard</div>
         </div>
-        <div style="font-size:0.8rem; color:var(--fp-muted); text-align:right;">
-            <i class="fa-regular fa-clock me-1"></i>
-            <span th:text="${#temporals.format(#temporals.createNow(), 'dd MMM yyyy, HH:mm')}"></span>
+        <div style="font-size:0.8rem; color:var(--fp-muted); text-align:right; display:flex; align-items:center; gap:0.75rem;">
+            <button onclick="refreshDashboard()" id="refresh-btn"
+                style="background:transparent; border:1px solid var(--fp-border); color:var(--fp-muted); font-size:0.75rem;
+                       padding:4px 10px; border-radius:6px; cursor:pointer; transition:all 0.15s;"
+                onmouseover="this.style.borderColor='var(--fp-blue)';this.style.color='var(--fp-blue)'"
+                onmouseout="this.style.borderColor='var(--fp-border)';this.style.color='var(--fp-muted)'">
+                <i class="fa-solid fa-rotate me-1"></i>Refresh
+            </button>
+            <span>
+                <i class="fa-regular fa-clock me-1"></i>
+                <span th:text="${#temporals.format(#temporals.createNow(), 'dd MMM yyyy, HH:mm')}" id="last-refresh-time"></span>
+            </span>
         </div>
     </div>
 
@@ -132,7 +177,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-blue-soft"><i class="fa-solid fa-truck"></i></div>
                 <div>
-                    <div class="kpi-value" th:text="${summary.totalVehicles()}">0</div>
+                    <div class="kpi-value" id="kpi-total" th:text="${summary.totalVehicles()}">0</div>
                     <div class="kpi-label">Total Vehicles</div>
                 </div>
             </div>
@@ -141,7 +186,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-green-soft"><i class="fa-solid fa-circle-check"></i></div>
                 <div>
-                    <div class="kpi-value" style="color:var(--fp-green)" th:text="${summary.activeVehicles()}">0</div>
+                    <div class="kpi-value" id="kpi-active" style="color:var(--fp-green)" th:text="${summary.activeVehicles()}">0</div>
                     <div class="kpi-label">Active</div>
                 </div>
             </div>
@@ -150,7 +195,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-yellow-soft"><i class="fa-solid fa-wrench"></i></div>
                 <div>
-                    <div class="kpi-value" style="color:var(--fp-yellow)" th:text="${summary.maintenanceVehicles()}">0</div>
+                    <div class="kpi-value" id="kpi-maint" style="color:var(--fp-yellow)" th:text="${summary.maintenanceVehicles()}">0</div>
                     <div class="kpi-label">In Maintenance</div>
                 </div>
             </div>
@@ -159,7 +204,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-red-soft"><i class="fa-solid fa-triangle-exclamation"></i></div>
                 <div>
-                    <div class="kpi-value" style="color:var(--fp-red)" th:text="${summary.overdueMaintenanceCount()}">0</div>
+                    <div class="kpi-value" id="kpi-overdue" style="color:var(--fp-red)" th:text="${summary.overdueMaintenanceCount()}">0</div>
                     <div class="kpi-label">Overdue Tasks</div>
                 </div>
             </div>
@@ -168,7 +213,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-purple-soft"><i class="fa-solid fa-bell"></i></div>
                 <div>
-                    <div class="kpi-value" style="color:var(--fp-purple)" th:text="${summary.unresolvedAlertCount()}">0</div>
+                    <div class="kpi-value" id="kpi-alerts" style="color:var(--fp-purple)" th:text="${summary.unresolvedAlertCount()}">0</div>
                     <div class="kpi-label">Active Alerts</div>
                 </div>
             </div>
@@ -177,7 +222,7 @@
             <div class="kpi-card">
                 <div class="kpi-icon bg-blue-soft"><i class="fa-solid fa-calendar-days"></i></div>
                 <div>
-                    <div class="kpi-value" th:text="${summary.upcomingMaintenanceCount()}">0</div>
+                    <div class="kpi-value" id="kpi-upcoming" th:text="${summary.upcomingMaintenanceCount()}">0</div>
                     <div class="kpi-label">Upcoming (30d)</div>
                 </div>
             </div>
@@ -216,22 +261,23 @@
                     <span><i class="fa-solid fa-bell me-1" style="color:var(--fp-red)"></i> Active Alerts</span>
                     <a href="/api/alerts/unresolved" target="_blank" style="font-size:0.75rem; color:var(--fp-blue)">View all →</a>
                 </div>
-                <table class="fp-table">
+                <table class="fp-table" id="alerts-table">
                     <thead>
                         <tr>
                             <th>Vehicle</th>
                             <th>Type</th>
                             <th>Severity</th>
                             <th>Message</th>
+                            <th></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr th:if="${#lists.isEmpty(summary.recentAlerts())}">
-                            <td colspan="4" style="color:var(--fp-muted); text-align:center; padding:1.5rem">
-                                <i class="fa-solid fa-party-horn me-1"></i> No active alerts
+                    <tbody id="alerts-tbody">
+                        <tr th:if="${#lists.isEmpty(summary.recentAlerts())}" id="no-alerts-row">
+                            <td colspan="5" style="color:var(--fp-muted); text-align:center; padding:1.5rem">
+                                <i class="fa-solid fa-circle-check me-1" style="color:var(--fp-green)"></i> No active alerts
                             </td>
                         </tr>
-                        <tr th:each="alert : ${summary.recentAlerts()}">
+                        <tr th:each="alert : ${summary.recentAlerts()}" th:data-alert-id="${alert.id()}">
                             <td th:text="${alert.vehicleRegistration()}" style="font-weight:500"></td>
                             <td th:text="${alert.alertType().name().replace('_',' ')}" style="color:var(--fp-muted)"></td>
                             <td>
@@ -239,8 +285,14 @@
                                       th:classappend="'badge-severity-' + ${alert.severity().name()}"
                                       th:text="${alert.severity()}"></span>
                             </td>
-                            <td style="color:var(--fp-muted); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                            <td style="color:var(--fp-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                                 th:text="${alert.message()}" th:title="${alert.message()}"></td>
+                            <td>
+                                <button class="btn-resolve"
+                                        th:onclick="'resolveAlert(' + ${alert.id()} + ', this)'">
+                                    Resolve
+                                </button>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -284,6 +336,9 @@
     </div>
 
 </div><!-- /main-content -->
+
+<!-- Toast container -->
+<div id="toast-container"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script th:inline="javascript">
@@ -352,6 +407,98 @@
         }
     });
     /*]]>*/
+
+    /* ── Interactive dashboard ────────────────────────────────── */
+
+    function showToast(message, type) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', info: 'fa-circle-info' };
+        toast.className = 'toast-item toast-' + type;
+        toast.innerHTML = '<i class="fa-solid ' + icons[type] + '"></i> ' + message;
+        container.appendChild(toast);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => toast.classList.add('show'));
+        });
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3500);
+    }
+
+    function updateKPI(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const current = parseInt(el.textContent, 10);
+        if (current === value) return;
+        el.textContent = value;
+        el.classList.remove('kpi-updated');
+        void el.offsetWidth; /* force reflow */
+        el.classList.add('kpi-updated');
+        el.addEventListener('animationend', () => el.classList.remove('kpi-updated'), { once: true });
+    }
+
+    function refreshDashboard() {
+        const btn = document.getElementById('refresh-btn');
+        if (btn) btn.disabled = true;
+        fetch('/api/dashboard/summary')
+            .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(res => {
+                const d = res.data;
+                updateKPI('kpi-total',    d.totalVehicles);
+                updateKPI('kpi-active',   d.activeVehicles);
+                updateKPI('kpi-maint',    d.maintenanceVehicles);
+                updateKPI('kpi-overdue',  d.overdueMaintenanceCount);
+                updateKPI('kpi-alerts',   d.unresolvedAlertCount);
+                updateKPI('kpi-upcoming', d.upcomingMaintenanceCount);
+                const ts = document.getElementById('last-refresh-time');
+                if (ts) {
+                    const now = new Date();
+                    ts.textContent = now.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+                }
+            })
+            .catch(err => showToast('Could not refresh: ' + err.message, 'error'))
+            .finally(() => { if (btn) btn.disabled = false; });
+    }
+
+    function resolveAlert(alertId, btn) {
+        btn.disabled = true;
+        btn.textContent = '...';
+        const row = btn.closest('tr');
+        fetch('/api/alerts/' + alertId + '/resolve', { method: 'PATCH' })
+            .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(() => {
+                row.classList.add('row-resolving');
+                showToast('Alert resolved', 'success');
+                setTimeout(() => {
+                    row.remove();
+                    const remaining = document.querySelectorAll('#alerts-tbody tr[data-alert-id]').length;
+                    if (remaining === 0) {
+                        const tbody = document.getElementById('alerts-tbody');
+                        tbody.innerHTML = '<tr id="no-alerts-row"><td colspan="5" style="color:var(--fp-muted); text-align:center; padding:1.5rem"><i class="fa-solid fa-circle-check me-1" style="color:var(--fp-green)"></i> No active alerts</td></tr>';
+                    }
+                    const kpi = document.getElementById('kpi-alerts');
+                    if (kpi) {
+                        const next = Math.max(0, parseInt(kpi.textContent, 10) - 1);
+                        updateKPI('kpi-alerts', next);
+                    }
+                }, 450);
+            })
+            .catch(err => {
+                showToast('Could not resolve alert: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Resolve';
+            });
+    }
+
+    /* Auto-refresh KPIs every 60 seconds */
+    setInterval(refreshDashboard, 60000);
 </script>
 </body>
 </html>
