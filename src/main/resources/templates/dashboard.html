@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>FleetPulse — Operations Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+    <style>
+        :root {
+            --fp-dark:   #0f172a;
+            --fp-panel:  #1e293b;
+            --fp-border: #334155;
+            --fp-text:   #e2e8f0;
+            --fp-muted:  #94a3b8;
+            --fp-blue:   #3b82f6;
+            --fp-green:  #22c55e;
+            --fp-yellow: #f59e0b;
+            --fp-red:    #ef4444;
+            --fp-purple: #a855f7;
+        }
+        body { background: var(--fp-dark); color: var(--fp-text); font-family: 'Segoe UI', sans-serif; }
+        .sidebar {
+            width: 240px; min-height: 100vh; background: var(--fp-panel);
+            border-right: 1px solid var(--fp-border); position: fixed; top: 0; left: 0; z-index: 100;
+        }
+        .sidebar .brand { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--fp-border); }
+        .sidebar .brand span.logo { font-size: 1.35rem; font-weight: 700; color: var(--fp-blue); letter-spacing: -0.5px; }
+        .sidebar .brand small { color: var(--fp-muted); font-size: 0.72rem; }
+        .sidebar nav a {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.7rem 1.5rem; color: var(--fp-muted); text-decoration: none;
+            font-size: 0.875rem; transition: all 0.15s;
+        }
+        .sidebar nav a:hover, .sidebar nav a.active {
+            color: var(--fp-text); background: rgba(59,130,246,.12);
+            border-right: 3px solid var(--fp-blue);
+        }
+        .sidebar nav a i { width: 16px; text-align: center; }
+        .main-content { margin-left: 240px; padding: 1.75rem 2rem; }
+        .page-header { margin-bottom: 1.5rem; }
+        .page-header h1 { font-size: 1.4rem; font-weight: 600; margin: 0; }
+        .page-header .breadcrumb { font-size: 0.8rem; color: var(--fp-muted); margin: 0; }
+
+        /* KPI Cards */
+        .kpi-card {
+            background: var(--fp-panel); border: 1px solid var(--fp-border);
+            border-radius: 10px; padding: 1.25rem 1.5rem;
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .kpi-icon {
+            width: 48px; height: 48px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+        .kpi-card .kpi-label { font-size: 0.8rem; color: var(--fp-muted); margin-top: 2px; }
+        .bg-blue-soft   { background: rgba(59,130,246,.15);  color: var(--fp-blue);   }
+        .bg-green-soft  { background: rgba(34,197,94,.15);   color: var(--fp-green);  }
+        .bg-yellow-soft { background: rgba(245,158,11,.15);  color: var(--fp-yellow); }
+        .bg-red-soft    { background: rgba(239,68,68,.15);   color: var(--fp-red);    }
+        .bg-purple-soft { background: rgba(168,85,247,.15);  color: var(--fp-purple); }
+
+        /* Charts & tables */
+        .card-fp {
+            background: var(--fp-panel); border: 1px solid var(--fp-border);
+            border-radius: 10px; padding: 1.25rem 1.5rem;
+        }
+        .card-fp .card-title { font-size: 0.9rem; font-weight: 600; color: var(--fp-text); margin-bottom: 1rem; }
+        .card-fp .card-subtitle { font-size: 0.75rem; color: var(--fp-muted); margin-bottom: 1rem; }
+
+        /* Tables */
+        .fp-table { width: 100%; font-size: 0.82rem; border-collapse: collapse; }
+        .fp-table th { color: var(--fp-muted); font-weight: 500; padding: 0.5rem 0.75rem;
+                        border-bottom: 1px solid var(--fp-border); text-align: left; }
+        .fp-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(51,65,85,.5); }
+        .fp-table tr:last-child td { border-bottom: none; }
+
+        /* Badges */
+        .badge-severity-CRITICAL { background: rgba(239,68,68,.2);   color: #fca5a5; }
+        .badge-severity-HIGH     { background: rgba(239,68,68,.15);  color: #f87171; }
+        .badge-severity-MEDIUM   { background: rgba(245,158,11,.15); color: #fcd34d; }
+        .badge-severity-LOW      { background: rgba(34,197,94,.15);  color: #86efac; }
+        .badge-status-ACTIVE         { background: rgba(34,197,94,.15);  color: #86efac; }
+        .badge-status-IN_MAINTENANCE { background: rgba(245,158,11,.15); color: #fcd34d; }
+        .badge-status-RETIRED        { background: rgba(148,163,184,.15);color: #94a3b8; }
+        .badge-status-OVERDUE        { background: rgba(239,68,68,.2);   color: #fca5a5; }
+        .badge-status-SCHEDULED      { background: rgba(59,130,246,.15); color: #93c5fd; }
+        .badge-status-IN_PROGRESS    { background: rgba(168,85,247,.15); color: #d8b4fe; }
+        .badge-status-COMPLETED      { background: rgba(34,197,94,.15);  color: #86efac; }
+        .badge-fp {
+            display: inline-block; padding: 2px 8px; border-radius: 999px;
+            font-size: 0.72rem; font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="brand">
+        <div class="logo"><i class="fa-solid fa-truck-fast text-primary me-1"></i> FleetPulse</div>
+        <small>Operations Intelligence</small>
+    </div>
+    <nav class="mt-2">
+        <a href="/" class="active"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+        <a href="/vehicles"><i class="fa-solid fa-truck"></i> Vehicles</a>
+        <a href="/swagger-ui.html" target="_blank"><i class="fa-solid fa-code"></i> API Docs</a>
+        <a href="/h2-console" target="_blank"><i class="fa-solid fa-database"></i> DB Console</a>
+        <a href="/actuator/health" target="_blank"><i class="fa-solid fa-heart-pulse"></i> Health</a>
+    </nav>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+
+    <!-- Page Header -->
+    <div class="page-header d-flex justify-content-between align-items-start">
+        <div>
+            <h1><i class="fa-solid fa-gauge-high me-2" style="color:var(--fp-blue)"></i>Operations Dashboard</h1>
+            <div class="breadcrumb">FleetPulse / Dashboard</div>
+        </div>
+        <div style="font-size:0.8rem; color:var(--fp-muted); text-align:right;">
+            <i class="fa-regular fa-clock me-1"></i>
+            <span th:text="${#temporals.format(#temporals.createNow(), 'dd MMM yyyy, HH:mm')}"></span>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-blue-soft"><i class="fa-solid fa-truck"></i></div>
+                <div>
+                    <div class="kpi-value" th:text="${summary.totalVehicles()}">0</div>
+                    <div class="kpi-label">Total Vehicles</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-green-soft"><i class="fa-solid fa-circle-check"></i></div>
+                <div>
+                    <div class="kpi-value" style="color:var(--fp-green)" th:text="${summary.activeVehicles()}">0</div>
+                    <div class="kpi-label">Active</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-yellow-soft"><i class="fa-solid fa-wrench"></i></div>
+                <div>
+                    <div class="kpi-value" style="color:var(--fp-yellow)" th:text="${summary.maintenanceVehicles()}">0</div>
+                    <div class="kpi-label">In Maintenance</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-red-soft"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div>
+                    <div class="kpi-value" style="color:var(--fp-red)" th:text="${summary.overdueMaintenanceCount()}">0</div>
+                    <div class="kpi-label">Overdue Tasks</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-purple-soft"><i class="fa-solid fa-bell"></i></div>
+                <div>
+                    <div class="kpi-value" style="color:var(--fp-purple)" th:text="${summary.unresolvedAlertCount()}">0</div>
+                    <div class="kpi-label">Active Alerts</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4 col-6">
+            <div class="kpi-card">
+                <div class="kpi-icon bg-blue-soft"><i class="fa-solid fa-calendar-days"></i></div>
+                <div>
+                    <div class="kpi-value" th:text="${summary.upcomingMaintenanceCount()}">0</div>
+                    <div class="kpi-label">Upcoming (30d)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-8">
+            <div class="card-fp h-100">
+                <div class="card-title">
+                    <i class="fa-solid fa-chart-line me-1" style="color:var(--fp-blue)"></i>
+                    Maintenance Cost Trend
+                </div>
+                <div class="card-subtitle">Monthly completed maintenance spend (last 6 months)</div>
+                <canvas id="costChart" height="110"></canvas>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="card-fp h-100">
+                <div class="card-title">
+                    <i class="fa-solid fa-chart-donut me-1" style="color:var(--fp-green)"></i>
+                    Fleet Status
+                </div>
+                <div class="card-subtitle">Current vehicle distribution by status</div>
+                <canvas id="statusChart" height="170"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts + Upcoming Maintenance Tables -->
+    <div class="row g-3">
+        <div class="col-xl-6">
+            <div class="card-fp">
+                <div class="card-title d-flex justify-content-between">
+                    <span><i class="fa-solid fa-bell me-1" style="color:var(--fp-red)"></i> Active Alerts</span>
+                    <a href="/api/alerts/unresolved" target="_blank" style="font-size:0.75rem; color:var(--fp-blue)">View all →</a>
+                </div>
+                <table class="fp-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(summary.recentAlerts())}">
+                            <td colspan="4" style="color:var(--fp-muted); text-align:center; padding:1.5rem">
+                                <i class="fa-solid fa-party-horn me-1"></i> No active alerts
+                            </td>
+                        </tr>
+                        <tr th:each="alert : ${summary.recentAlerts()}">
+                            <td th:text="${alert.vehicleRegistration()}" style="font-weight:500"></td>
+                            <td th:text="${alert.alertType().name().replace('_',' ')}" style="color:var(--fp-muted)"></td>
+                            <td>
+                                <span class="badge-fp"
+                                      th:classappend="'badge-severity-' + ${alert.severity().name()}"
+                                      th:text="${alert.severity()}"></span>
+                            </td>
+                            <td style="color:var(--fp-muted); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                th:text="${alert.message()}" th:title="${alert.message()}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card-fp">
+                <div class="card-title d-flex justify-content-between">
+                    <span><i class="fa-solid fa-calendar-check me-1" style="color:var(--fp-yellow)"></i> Upcoming Maintenance <small style="color:var(--fp-muted)">(next 30 days)</small></span>
+                    <a href="/api/maintenance/upcoming" target="_blank" style="font-size:0.75rem; color:var(--fp-blue)">View all →</a>
+                </div>
+                <table class="fp-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Task</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${#lists.isEmpty(summary.upcomingMaintenance())}">
+                            <td colspan="4" style="color:var(--fp-muted); text-align:center; padding:1.5rem">
+                                No maintenance scheduled in the next 30 days
+                            </td>
+                        </tr>
+                        <tr th:each="m : ${summary.upcomingMaintenance()}">
+                            <td th:text="${m.vehicleRegistration()}" style="font-weight:500"></td>
+                            <td th:text="${m.maintenanceType().name().replace('_',' ')}" style="color:var(--fp-muted)"></td>
+                            <td th:text="${#temporals.format(m.scheduledDate(), 'dd MMM yyyy')}"></td>
+                            <td>
+                                <span class="badge-fp"
+                                      th:classappend="'badge-status-' + ${m.status().name()}"
+                                      th:text="${m.status()}"></span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /main-content -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const costLabels = /*[[${monthlyCostLabels}]]*/ [];
+    const costValues = /*[[${monthlyCostValues}]]*/ [];
+    const activeCount = /*[[${summary.activeVehicles()}]]*/ 0;
+    const maintCount  = /*[[${summary.maintenanceVehicles()}]]*/ 0;
+    const retiredCount= /*[[${summary.retiredVehicles()}]]*/ 0;
+
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = '#1e293b';
+
+    // Maintenance cost trend
+    new Chart(document.getElementById('costChart'), {
+        type: 'line',
+        data: {
+            labels: costLabels,
+            datasets: [{
+                label: 'Maintenance Spend ($)',
+                data: costValues,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.1)',
+                borderWidth: 2,
+                pointBackgroundColor: '#3b82f6',
+                pointRadius: 4,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(51,65,85,0.5)' },
+                    ticks: { callback: v => '$' + v.toLocaleString() }
+                },
+                x: { grid: { color: 'rgba(51,65,85,0.5)' } }
+            }
+        }
+    });
+
+    // Fleet status doughnut
+    new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Active', 'In Maintenance', 'Retired'],
+            datasets: [{
+                data: [activeCount, maintCount, retiredCount],
+                backgroundColor: ['rgba(34,197,94,0.8)', 'rgba(245,158,11,0.8)', 'rgba(148,163,184,0.5)'],
+                borderColor: ['#22c55e', '#f59e0b', '#94a3b8'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '70%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { padding: 16, usePointStyle: true, pointStyle: 'circle' }
+                }
+            }
+        }
+    });
+    /*]]>*/
+</script>
+</body>
+</html>

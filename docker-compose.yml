@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fleetpulse-postgres
+    environment:
+      POSTGRES_DB: fleetpulse
+      POSTGRES_USER: fleetpulse_user
+      POSTGRES_PASSWORD: fleetpulse_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - fleetpulse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleetpulse_user -d fleetpulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fleetpulse-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fleetpulse
+      SPRING_DATASOURCE_USERNAME: fleetpulse_user
+      SPRING_DATASOURCE_PASSWORD: fleetpulse_pass
+    ports:
+      - "8080:8080"
+
+volumes:
+  fleetpulse_pgdata:

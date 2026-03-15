@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>FleetPulse — Fleet Vehicles</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+    <style>
+        :root {
+            --fp-dark:   #0f172a; --fp-panel: #1e293b; --fp-border: #334155;
+            --fp-text:   #e2e8f0; --fp-muted: #94a3b8; --fp-blue: #3b82f6;
+            --fp-green:  #22c55e; --fp-yellow: #f59e0b; --fp-red: #ef4444;
+        }
+        body { background: var(--fp-dark); color: var(--fp-text); font-family: 'Segoe UI', sans-serif; }
+        .sidebar { width:240px; min-height:100vh; background:var(--fp-panel); border-right:1px solid var(--fp-border); position:fixed; top:0; left:0; }
+        .sidebar .brand { padding:1.25rem 1.5rem; border-bottom:1px solid var(--fp-border); }
+        .sidebar .brand .logo { font-size:1.35rem; font-weight:700; color:var(--fp-blue); }
+        .sidebar .brand small { color:var(--fp-muted); font-size:0.72rem; }
+        .sidebar nav a { display:flex; align-items:center; gap:.75rem; padding:.7rem 1.5rem; color:var(--fp-muted); text-decoration:none; font-size:.875rem; transition:all .15s; }
+        .sidebar nav a:hover, .sidebar nav a.active { color:var(--fp-text); background:rgba(59,130,246,.12); border-right:3px solid var(--fp-blue); }
+        .sidebar nav a i { width:16px; text-align:center; }
+        .main-content { margin-left:240px; padding:1.75rem 2rem; }
+        .card-fp { background:var(--fp-panel); border:1px solid var(--fp-border); border-radius:10px; padding:1.25rem 1.5rem; }
+        .fp-table { width:100%; font-size:.83rem; border-collapse:collapse; }
+        .fp-table th { color:var(--fp-muted); font-weight:500; padding:.6rem .75rem; border-bottom:1px solid var(--fp-border); text-align:left; white-space:nowrap; }
+        .fp-table td { padding:.65rem .75rem; border-bottom:1px solid rgba(51,65,85,.5); vertical-align:middle; }
+        .fp-table tr:hover td { background:rgba(59,130,246,.05); }
+        .fp-table tr:last-child td { border-bottom:none; }
+        .badge-fp { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.72rem; font-weight:500; }
+        .badge-status-ACTIVE         { background:rgba(34,197,94,.15);  color:#86efac; }
+        .badge-status-IN_MAINTENANCE { background:rgba(245,158,11,.15); color:#fcd34d; }
+        .badge-status-RETIRED        { background:rgba(148,163,184,.15);color:#94a3b8; }
+        .filter-btn { background:var(--fp-panel); color:var(--fp-muted); border:1px solid var(--fp-border); border-radius:6px; padding:5px 14px; font-size:.8rem; cursor:pointer; transition:.15s; }
+        .filter-btn.active, .filter-btn:hover { background:var(--fp-blue); color:#fff; border-color:var(--fp-blue); }
+        input.search-box { background:var(--fp-panel); border:1px solid var(--fp-border); color:var(--fp-text); border-radius:8px; padding:6px 12px; font-size:.83rem; width:220px; }
+        input.search-box::placeholder { color:var(--fp-muted); }
+        input.search-box:focus { outline:none; border-color:var(--fp-blue); }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="brand">
+        <div class="logo"><i class="fa-solid fa-truck-fast text-primary me-1"></i> FleetPulse</div>
+        <small>Operations Intelligence</small>
+    </div>
+    <nav class="mt-2">
+        <a href="/"><i class="fa-solid fa-gauge-high"></i> Dashboard</a>
+        <a href="/vehicles" class="active"><i class="fa-solid fa-truck"></i> Vehicles</a>
+        <a href="/swagger-ui.html" target="_blank"><i class="fa-solid fa-code"></i> API Docs</a>
+        <a href="/h2-console" target="_blank"><i class="fa-solid fa-database"></i> DB Console</a>
+        <a href="/actuator/health" target="_blank"><i class="fa-solid fa-heart-pulse"></i> Health</a>
+    </nav>
+</aside>
+
+<div class="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 style="font-size:1.4rem; font-weight:600; margin:0">
+                <i class="fa-solid fa-truck me-2" style="color:var(--fp-blue)"></i>Fleet Vehicles
+            </h1>
+            <div style="font-size:.8rem; color:var(--fp-muted)">FleetPulse / Vehicles</div>
+        </div>
+        <div style="font-size:.8rem; color:var(--fp-muted)">
+            <span th:text="${vehicles.size()}">0</span> vehicles registered
+        </div>
+    </div>
+
+    <div class="card-fp">
+        <!-- Filter & Search Bar -->
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="filter-btn active" onclick="filterTable('ALL', this)">All</button>
+                <button class="filter-btn" onclick="filterTable('ACTIVE', this)">
+                    <i class="fa-solid fa-circle-check me-1" style="color:#86efac"></i>Active
+                </button>
+                <button class="filter-btn" onclick="filterTable('IN_MAINTENANCE', this)">
+                    <i class="fa-solid fa-wrench me-1" style="color:#fcd34d"></i>In Maintenance
+                </button>
+                <button class="filter-btn" onclick="filterTable('RETIRED', this)">
+                    <i class="fa-solid fa-ban me-1" style="color:#94a3b8"></i>Retired
+                </button>
+            </div>
+            <input class="search-box" type="text" id="searchBox" placeholder="&#xF002;  Search vehicles..." oninput="searchTable(this.value)"/>
+        </div>
+
+        <table class="fp-table" id="vehiclesTable">
+            <thead>
+                <tr>
+                    <th>Registration</th>
+                    <th>Make / Model</th>
+                    <th>Year</th>
+                    <th>Type</th>
+                    <th>Fuel</th>
+                    <th>Status</th>
+                    <th>Current Mileage</th>
+                    <th>Next Service</th>
+                    <th>Assigned Driver</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="v : ${vehicles}"
+                    th:attr="data-status=${v.status().name()}">
+                    <td>
+                        <span style="font-weight:600; color:var(--fp-blue)" th:text="${v.registrationNumber()}"></span>
+                    </td>
+                    <td>
+                        <span th:text="${v.make() + ' ' + v.model()}"></span>
+                    </td>
+                    <td th:text="${v.year()}" style="color:var(--fp-muted)"></td>
+                    <td th:text="${v.vehicleType()}" style="color:var(--fp-muted)"></td>
+                    <td th:text="${v.fuelType()}" style="color:var(--fp-muted)"></td>
+                    <td>
+                        <span class="badge-fp"
+                              th:classappend="'badge-status-' + ${v.status().name()}"
+                              th:text="${v.status().name().replace('_',' ')}"></span>
+                    </td>
+                    <td>
+                        <span th:if="${v.currentMileage() != null}"
+                              th:text="${#numbers.formatDecimal(v.currentMileage(), 0, 'COMMA', 0, 'POINT') + ' mi'}"></span>
+                        <span th:unless="${v.currentMileage() != null}" style="color:var(--fp-muted)">—</span>
+                    </td>
+                    <td>
+                        <span th:if="${v.nextServiceMileage() != null}"
+                              th:text="${#numbers.formatDecimal(v.nextServiceMileage(), 0, 'COMMA', 0, 'POINT') + ' mi'}"></span>
+                        <span th:unless="${v.nextServiceMileage() != null}" style="color:var(--fp-muted)">—</span>
+                    </td>
+                    <td>
+                        <span th:if="${v.assignedDriverName() != null}"
+                              th:text="${v.assignedDriverName()}"
+                              style="color:var(--fp-text)"></span>
+                        <span th:unless="${v.assignedDriverName() != null}"
+                              style="color:var(--fp-muted)">Unassigned</span>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(vehicles)}">
+                    <td colspan="9" style="text-align:center; padding:2rem; color:var(--fp-muted)">
+                        No vehicles registered yet
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function filterTable(status, btn) {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('#vehiclesTable tbody tr[data-status]').forEach(row => {
+            row.style.display = (status === 'ALL' || row.dataset.status === status) ? '' : 'none';
+        });
+    }
+
+    function searchTable(q) {
+        q = q.toLowerCase();
+        document.querySelectorAll('#vehiclesTable tbody tr[data-status]').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+    }
+</script>
+</body>
+</html>
